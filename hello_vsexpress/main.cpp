@@ -8,6 +8,21 @@
 #include "shader.h"
 #include "camera.h"
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
+
+/* ==== TODO ====
+
+Wireframe toggle
+Shading with normals
+Clean up obj loader to opengl - maybe write your own obj loader and ditch tinyobj
+Find how to structure the program to share needed variables i.e. window WIDTH HEIGHT to shader
+Automate loading matrices to shader
+Get key inputs for wireframe and camera manipulation
+
+*/
+
 
 
 // Function prototypes
@@ -16,6 +31,12 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 // Window dimensions
 const GLuint WIDTH = 800, HEIGHT = 600;
+
+// models
+
+const std::string MODEL_PATH = "models/teapot.obj";
+
+
 
 // The MAIN function, from here we start the application and run the game loop
 int main()
@@ -66,7 +87,7 @@ int main()
 
 	// Init Camera ==================================
 
-	Camera cam = Camera::Camera(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+	Camera cam = Camera::Camera(glm::vec3(0.0f, 4.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f));
 
 	
 
@@ -80,43 +101,101 @@ int main()
 		-0.5f, -0.5f, 0.5f,	0.5f, -0.5f, 0.5f,	0.5f, -0.5f, -0.5f,	-0.5f, -0.5f, -0.5f
 	};
 
-	GLfloat boxOrder[] = {
+	GLuint boxOrder[] = {
 		0,1,2,	0,2,3,	2,3,4,	2,4,7,	7,4,5,	7,5,6,	5,6,1,	5,1,0,	1,2,6,	6,7,2,	3,0,5,	3,4,5
 	};
 
-	GLfloat vertices[] = {
-		// Positions         // Colors
-		0.5f, -0.5f, 0.0f,   1.0f, 0.0f, 0.0f,  // Bottom Right
-		-0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,  // Bottom Left
-		0.0f,  0.5f, 0.0f,   0.0f, 0.0f, 1.0f   // Top 
-	};
+	//GLfloat vertices[] = {
+	//	// Positions         // Colors
+	//	0.5f, -0.5f, 0.0f,   1.0f, 0.0f, 0.0f,  // Bottom Right
+	//	-0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,  // Bottom Left
+	//	0.0f,  0.5f, 0.0f,   0.0f, 0.0f, 1.0f   // Top 
+	//};
+
+	//GLfloat vertices[] = {
+	//	0.5f,  0.5f, 0.0f,  // Top Right
+	//	0.5f, -0.5f, 0.0f,  // Bottom Right
+	//	-0.5f, -0.5f, 0.0f,  // Bottom Left
+	//	-0.5f,  0.5f, 0.0f   // Top Left 
+	//};
+	//GLuint indices[] = {  // Note that we start from 0!
+	//	0, 1, 3,   // First Triangle
+	//	1, 2, 3    // Second Triangle
+	//};
+
 	GLuint VAO, VBO, EBO;
 	glGenVertexArrays(1, &VAO);
 	glGenBuffers(1, &VBO);
-	//glGenBuffers(1, &EBO);
+	glGenBuffers(1, &EBO);
 	// Bind the Vertex Array Object first, then bind and set vertex buffer(s) and attribute pointer(s).
 	glBindVertexArray(VAO);
-
+	/*
+	// VBO
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-	//glBufferData(GL_ARRAY_BUFFER, sizeof(box), box, GL_STATIC_DRAW);
+	//glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(box), box, GL_STATIC_DRAW);
 
+	// EBO
 	// Bind element array as well (tells the order in which to draw the triangles from the 8 box vertices)
-	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(boxOrder), boxOrder, GL_STATIC_DRAW);	
-
-	// Position attribute
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
-	glEnableVertexAttribArray(0);
-	// Color attribute
-	//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
-	//glEnableVertexAttribArray(1);
-
-	// Box position
-	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-	//glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(boxOrder), boxOrder, GL_STATIC_DRAW);	
 	
 
+	// Pass in VBO of position data
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+	
+	glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind buffer
+	glBindVertexArray(0); // Unbind VAO
+	*/
+	
+	// new tiny obj loader
+
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+
+	std::string err;
+	// c_str on std::string allows to be used for C functions (tinyobj is a C lib)
+	bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, MODEL_PATH.c_str());	
+	
+	if (!err.empty()) { 
+		std::cerr << err << std::endl;
+	}
+	if (!ret) {
+		glfwTerminate();
+		return 1;
+	}
+	/*for (size_t v=0; v < attrib.vertices.size(); v=v+3)
+	{
+	std::cout << "v=" << v << "   pos=" << attrib.vertices[v]<<", "<< attrib.vertices[v+1]<<", "<< attrib.vertices[v+2] << std::endl;
+	}*/
+
+	std::vector<GLuint> indices;
+	for (size_t i = 0; i < shapes.size(); i++) {
+		for (int j = 0; j < shapes[i].mesh.indices.size(); j++) {
+			//std::cout << "i="<<i<<"   j="<<j<<"   idx="<< shapes[i].mesh.indices[j].vertex_index << std::endl;
+			indices.push_back(shapes[i].mesh.indices[j].vertex_index);
+		}
+	}
+
+	
+	
+	// VBO 
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, attrib.vertices.size()*sizeof(float), &attrib.vertices.front(), GL_STATIC_DRAW);	
+	
+	// EBO
+	// Bind element array as well (tells the order in which to draw the triangles from the 8 box vertices)
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size()*sizeof(GLuint), &indices.front(), GL_STATIC_DRAW);
+
+	// Pass in VBO of position data
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind buffer
 	glBindVertexArray(0); // Unbind VAO
 
 
@@ -141,6 +220,10 @@ int main()
 		glm::mat4 model, view, projection;
 		
 		model = glm::rotate_slow(model, time, glm::vec3(0.0f, 1.0f, 0.0f));
+		if (MODEL_PATH == "models/teapot.obj") {
+			float scale = 0.02f;
+			model = glm::scale(model, glm::vec3(scale,scale,scale));
+		}
 		view = cam.getView();
 		projection = cam.getProjection();
 
@@ -157,13 +240,14 @@ int main()
 
 		// Draw		
 		glBindVertexArray(VAO);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-		//glDrawElements(GL_TRIANGLES, 0, GL_UNSIGNED_INT, 0);
+		//glDrawArrays(GL_TRIANGLES, 0, 12);
+		// this specifies how many vertices you're drawing, make sure it matches your element list
+		glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
 
 		// Swap the screen buffers
 		glfwSwapBuffers(window);
-		time += 0.1f;
+		time += 0.01f;
 	}
 
 	// Loop End ======================

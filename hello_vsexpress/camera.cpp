@@ -1,10 +1,10 @@
 #include "camera.h"
 
 
-Camera::Camera(const glm::vec3& _position, const glm::vec3& _viewDir)
+Camera::Camera(const glm::vec3& _position, const glm::vec3& _lookAt)
 {
 	m_position = _position;
-	m_viewDir = glm::normalize(_viewDir);
+	m_viewDir = glm::normalize(_lookAt-_position);
 	m_right = glm::normalize(glm::cross(m_viewDir, glm::vec3(0.0f, 1.0f, 0.0f)));
 	m_up = glm::vec3(0, 1.0f, 0);
 }

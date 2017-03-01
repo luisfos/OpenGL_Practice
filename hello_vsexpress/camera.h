@@ -12,7 +12,7 @@
 class Camera {
 public:
 
-	Camera(const glm::vec3& _position, const glm::vec3& _viewDir);
+	Camera(const glm::vec3& _position, const glm::vec3& _lookAt);
 
 	~Camera();
 
