@@ -5,6 +5,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/vec3.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include "shader.h"
 #include "camera.h"
 
@@ -14,12 +15,13 @@
 
 /* ==== TODO ====
 
-Wireframe toggle
+Wireframe toggle - done
+Continue rewriting obj to gl vertices - rewrite tinyobj implementation from scratch
 Shading with normals
 Clean up obj loader to opengl - maybe write your own obj loader and ditch tinyobj
 Find how to structure the program to share needed variables i.e. window WIDTH HEIGHT to shader
 Automate loading matrices to shader
-Get key inputs for wireframe and camera manipulation
+Get key inputs for camera manipulation
 
 */
 
@@ -34,7 +36,7 @@ const GLuint WIDTH = 800, HEIGHT = 600;
 
 // models
 
-const std::string MODEL_PATH = "models/teapot.obj";
+const std::string MODEL_PATH = "models/cube.obj";
 
 
 
@@ -63,6 +65,8 @@ int main()
 	glfwMakeContextCurrent(window);
 	// Set the required callback functions
 	glfwSetKeyCallback(window, key_callback);
+	// for when you don't care about order of key presses and want to handle multiple keys at the same time
+	glfwSetInputMode(window, GLFW_STICKY_KEYS, 1);
 
 	// Init GLEW ============================================================================================
 	// Set this to true so GLEW knows to use a modern approach to retrieving function pointers and extensions
@@ -96,32 +100,6 @@ int main()
 	// Set up vertex data (and buffer(s)) and attribute pointers
 	// order must be counter clockwise
 	
-	GLfloat box[] = {
-		0.5f, 0.5f, 0.5f,	0.5f, 0.5f, -0.5f,	-0.5f, 0.5f, -0.5f,	-0.5f, 0.5f, 0.5f,
-		-0.5f, -0.5f, 0.5f,	0.5f, -0.5f, 0.5f,	0.5f, -0.5f, -0.5f,	-0.5f, -0.5f, -0.5f
-	};
-
-	GLuint boxOrder[] = {
-		0,1,2,	0,2,3,	2,3,4,	2,4,7,	7,4,5,	7,5,6,	5,6,1,	5,1,0,	1,2,6,	6,7,2,	3,0,5,	3,4,5
-	};
-
-	//GLfloat vertices[] = {
-	//	// Positions         // Colors
-	//	0.5f, -0.5f, 0.0f,   1.0f, 0.0f, 0.0f,  // Bottom Right
-	//	-0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,  // Bottom Left
-	//	0.0f,  0.5f, 0.0f,   0.0f, 0.0f, 1.0f   // Top 
-	//};
-
-	//GLfloat vertices[] = {
-	//	0.5f,  0.5f, 0.0f,  // Top Right
-	//	0.5f, -0.5f, 0.0f,  // Bottom Right
-	//	-0.5f, -0.5f, 0.0f,  // Bottom Left
-	//	-0.5f,  0.5f, 0.0f   // Top Left 
-	//};
-	//GLuint indices[] = {  // Note that we start from 0!
-	//	0, 1, 3,   // First Triangle
-	//	1, 2, 3    // Second Triangle
-	//};
 
 	GLuint VAO, VBO, EBO;
 	glGenVertexArrays(1, &VAO);
@@ -129,32 +107,19 @@ int main()
 	glGenBuffers(1, &EBO);
 	// Bind the Vertex Array Object first, then bind and set vertex buffer(s) and attribute pointer(s).
 	glBindVertexArray(VAO);
-	/*
-	// VBO
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	//glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(box), box, GL_STATIC_DRAW);
-
-	// EBO
-	// Bind element array as well (tells the order in which to draw the triangles from the 8 box vertices)
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(boxOrder), boxOrder, GL_STATIC_DRAW);	
 	
-
-	// Pass in VBO of position data
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-	glEnableVertexAttribArray(0);
-	
-	glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind buffer
-	glBindVertexArray(0); // Unbind VAO
-	*/
 	
 	// new tiny obj loader
 
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
+
+	struct mesh {
+		std::vector<float>positions;
+		std::vector<float>normals;
+		std::vector<float>uvs;
+	};
 
 	std::string err;
 	// c_str on std::string allows to be used for C functions (tinyobj is a C lib)
@@ -167,33 +132,81 @@ int main()
 		glfwTerminate();
 		return 1;
 	}
+	
+	std::cout << "vert size = " << attrib.vertices.size() << std::endl;
+	std::cout << "norm size = " << attrib.normals.size() << std::endl;
+	std::cout << "index size = " << shapes[0].mesh.indices.size() << std::endl;
+
+
+	// load into inefficient vert list
+	std::vector<glm::vec3> vertices;
+	// for each shape ( shape = object/mesh ) 
+	for (size_t s = 0; s < shapes.size(); s++) {
+		tinyobj::mesh_t m = shapes[s].mesh;				
+		// for each index = face??
+		for (size_t f = 0; f < m.indices.size()/3; f++) {
+			// index for v1, v2, v3
+			tinyobj::index_t i0 = m.indices[3 * f + 0];
+			tinyobj::index_t i1 = m.indices[3 * f + 1];
+			tinyobj::index_t i2 = m.indices[3 * f + 2];			
+			
+			// triangle positions
+			glm::vec3 v1 = glm::vec3(attrib.vertices[i0.vertex_index + 0], attrib.vertices[i0.vertex_index + 1], attrib.vertices[i0.vertex_index + 2]);
+			vertices.push_back(v1);
+			glm::vec3 v2 = glm::vec3(attrib.vertices[i1.vertex_index + 0], attrib.vertices[i1.vertex_index + 1], attrib.vertices[i1.vertex_index + 2]);
+			vertices.push_back(v2);
+			glm::vec3 v3 = glm::vec3(attrib.vertices[i2.vertex_index + 0], attrib.vertices[i2.vertex_index + 1], attrib.vertices[i2.vertex_index + 2]);
+			vertices.push_back(v3);
+
+			std::cout << "face = " << f << "   v1 = " << glm::to_string(v1) << std::endl;
+
+
+			//vertices.push_back(attrib.vertices[i0.vertex_index + 0]); // x
+			//vertices.push_back(attrib.vertices[i0.vertex_index + 1]); // y
+			//vertices.push_back(attrib.vertices[i0.vertex_index + 2]); // z			
+
+												
+
+
+		}
+	}
+
+	
+		
+	
 	/*for (size_t v=0; v < attrib.vertices.size(); v=v+3)
 	{
 	std::cout << "v=" << v << "   pos=" << attrib.vertices[v]<<", "<< attrib.vertices[v+1]<<", "<< attrib.vertices[v+2] << std::endl;
 	}*/
 
-	std::vector<GLuint> indices;
-	for (size_t i = 0; i < shapes.size(); i++) {
-		for (int j = 0; j < shapes[i].mesh.indices.size(); j++) {
-			//std::cout << "i="<<i<<"   j="<<j<<"   idx="<< shapes[i].mesh.indices[j].vertex_index << std::endl;
-			indices.push_back(shapes[i].mesh.indices[j].vertex_index);
-		}
-	}
+	//std::vector<GLuint> indices;
+	//for (size_t i = 0; i < shapes.size(); i++) {
+	//	for (int j = 0; j < shapes[i].mesh.indices.size(); j++) {
+	//		//std::cout << "i="<<i<<"   j="<<j<<"   idx="<< shapes[i].mesh.indices[j].vertex_index << std::endl;
+	//		indices.push_back(shapes[i].mesh.indices[j].vertex_index);
+	//	}
+	//}
 
 	
 	
-	// VBO 
+	// VBO
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, attrib.vertices.size()*sizeof(float), &attrib.vertices.front(), GL_STATIC_DRAW);	
+	//glBufferData(GL_ARRAY_BUFFER, attrib.vertices.size()*sizeof(float), &attrib.vertices.front(), GL_STATIC_DRAW);	
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices.front(), GL_STATIC_DRAW);
 	
 	// EBO
 	// Bind element array as well (tells the order in which to draw the triangles from the 8 box vertices)
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size()*sizeof(GLuint), &indices.front(), GL_STATIC_DRAW);
+	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size()*sizeof(GLuint), &indices.front(), GL_STATIC_DRAW);
 
+	// Where we specify multiple vbos with strides
 	// Pass in VBO of position data
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
 	glEnableVertexAttribArray(0);
+
+	// Normal attribute
+	//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+	//glEnableVertexAttribArray(1);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind buffer
 	glBindVertexArray(0); // Unbind VAO
@@ -205,7 +218,7 @@ int main()
 
 	while (!glfwWindowShouldClose(window))
 	{
-		// Check if any events have been activiated (key pressed, mouse moved etc.) and call corresponding response functions
+		// Handle input ( from the keycallback function )
 		glfwPollEvents();
 
 		// Render
@@ -240,9 +253,9 @@ int main()
 
 		// Draw		
 		glBindVertexArray(VAO);
-		//glDrawArrays(GL_TRIANGLES, 0, 12);
+		glDrawArrays(GL_TRIANGLES, 0, 12);
 		// this specifies how many vertices you're drawing, make sure it matches your element list
-		glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+		//glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
 
 		// Swap the screen buffers
@@ -259,11 +272,35 @@ int main()
 	return 0;
 }
 
+bool wireframe = false;
+
+// key press for ->
+// key release for <-
+// key repeat for constant
+// key unknown = any non standard keyboard button e.g. custom media keys (maybe any?)
+
 
 // Is called whenever a key is pressed/released via GLFW
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
 {
-	std::cout << key << std::endl;
-	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+	//std::cout << key << std::endl;
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, GL_TRUE);
+	}
+	if (key == GLFW_KEY_W) {
+		switch (action) 
+		{
+			case GLFW_PRESS:
+				std::cout << "W pressed" << std::endl;
+				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+				break;
+			case GLFW_RELEASE:
+				std::cout << "W released" << std::endl;
+				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+				break;
+			case GLFW_REPEAT:
+				//std::cout << " W REPEAT" << std::endl;				
+				break;
+		}
+	}
 }
