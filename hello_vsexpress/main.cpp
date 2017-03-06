@@ -16,7 +16,7 @@
 /* ==== TODO ====
 
 Wireframe toggle - done
-Continue rewriting obj to gl vertices - rewrite tinyobj implementation from scratch
+FACKING vertices (no index) working in new method - get normals next
 Shading with normals
 Clean up obj loader to opengl - maybe write your own obj loader and ditch tinyobj
 Find how to structure the program to share needed variables i.e. window WIDTH HEIGHT to shader
@@ -116,9 +116,9 @@ int main()
 	std::vector<tinyobj::material_t> materials;
 
 	struct mesh {
-		std::vector<float>positions;
-		std::vector<float>normals;
-		std::vector<float>uvs;
+		std::vector<glm::vec3>positions;
+		std::vector<glm::vec3>normals;
+		std::vector<glm::vec2>uvs;
 	};
 
 	std::string err;
@@ -133,60 +133,39 @@ int main()
 		return 1;
 	}
 	
-	std::cout << "vert size = " << attrib.vertices.size() << std::endl;
-	std::cout << "norm size = " << attrib.normals.size() << std::endl;
-	std::cout << "index size = " << shapes[0].mesh.indices.size() << std::endl;
+	//std::cout << "vert size = " << attrib.vertices.size() << std::endl;
+	//std::cout << "norm size = " << attrib.normals.size() << std::endl;
+	//std::cout << "index size = " << shapes[0].mesh.indices.size() << std::endl;
 
-
+	
 	// load into inefficient vert list
 	std::vector<glm::vec3> vertices;
-	// for each shape ( shape = object/mesh ) 
+	
+	
+	/*for (int i = 0; i < 12; i++) {
+		vertices.push_back(glm::vec3());
+	}*/
+	
+	
 	for (size_t s = 0; s < shapes.size(); s++) {
-		tinyobj::mesh_t m = shapes[s].mesh;				
-		// for each index = face??
-		for (size_t f = 0; f < m.indices.size()/3; f++) {
-			// index for v1, v2, v3
-			tinyobj::index_t i0 = m.indices[3 * f + 0];
-			tinyobj::index_t i1 = m.indices[3 * f + 1];
-			tinyobj::index_t i2 = m.indices[3 * f + 2];			
-			
-			// triangle positions
-			glm::vec3 v1 = glm::vec3(attrib.vertices[i0.vertex_index + 0], attrib.vertices[i0.vertex_index + 1], attrib.vertices[i0.vertex_index + 2]);
+		int vSize = attrib.vertices.size()-1;
+		for (size_t f = 0; f < shapes[s].mesh.indices.size() / 3; f++) {
+			// find the index for each vertex
+			tinyobj::index_t idx0 = shapes[s].mesh.indices[3 * f + 0];
+			tinyobj::index_t idx1 = shapes[s].mesh.indices[3 * f + 1];
+			tinyobj::index_t idx2 = shapes[s].mesh.indices[3 * f + 2];
+
+			// remember to multiply by 3 because the index points to float array, not vectors
+			glm::vec3 v1 = glm::vec3(attrib.vertices[3 * idx0.vertex_index + 0], attrib.vertices[3 * idx0.vertex_index + 1], attrib.vertices[3 * idx0.vertex_index + 2]);
+			glm::vec3 v2 = glm::vec3(attrib.vertices[3 * idx1.vertex_index + 0], attrib.vertices[3 * idx1.vertex_index + 1], attrib.vertices[3 * idx1.vertex_index + 2]);
+			glm::vec3 v3 = glm::vec3(attrib.vertices[3 * idx2.vertex_index + 0], attrib.vertices[3 * idx2.vertex_index + 1], attrib.vertices[3 * idx2.vertex_index + 2]);
+
 			vertices.push_back(v1);
-			glm::vec3 v2 = glm::vec3(attrib.vertices[i1.vertex_index + 0], attrib.vertices[i1.vertex_index + 1], attrib.vertices[i1.vertex_index + 2]);
 			vertices.push_back(v2);
-			glm::vec3 v3 = glm::vec3(attrib.vertices[i2.vertex_index + 0], attrib.vertices[i2.vertex_index + 1], attrib.vertices[i2.vertex_index + 2]);
 			vertices.push_back(v3);
-
-			std::cout << "face = " << f << "   v1 = " << glm::to_string(v1) << std::endl;
-
-
-			//vertices.push_back(attrib.vertices[i0.vertex_index + 0]); // x
-			//vertices.push_back(attrib.vertices[i0.vertex_index + 1]); // y
-			//vertices.push_back(attrib.vertices[i0.vertex_index + 2]); // z			
-
-												
-
-
 		}
 	}
-
 	
-		
-	
-	/*for (size_t v=0; v < attrib.vertices.size(); v=v+3)
-	{
-	std::cout << "v=" << v << "   pos=" << attrib.vertices[v]<<", "<< attrib.vertices[v+1]<<", "<< attrib.vertices[v+2] << std::endl;
-	}*/
-
-	//std::vector<GLuint> indices;
-	//for (size_t i = 0; i < shapes.size(); i++) {
-	//	for (int j = 0; j < shapes[i].mesh.indices.size(); j++) {
-	//		//std::cout << "i="<<i<<"   j="<<j<<"   idx="<< shapes[i].mesh.indices[j].vertex_index << std::endl;
-	//		indices.push_back(shapes[i].mesh.indices[j].vertex_index);
-	//	}
-	//}
-
 	
 	
 	// VBO
@@ -194,19 +173,13 @@ int main()
 	//glBufferData(GL_ARRAY_BUFFER, attrib.vertices.size()*sizeof(float), &attrib.vertices.front(), GL_STATIC_DRAW);	
 	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices.front(), GL_STATIC_DRAW);
 	
-	// EBO
-	// Bind element array as well (tells the order in which to draw the triangles from the 8 box vertices)
-	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size()*sizeof(GLuint), &indices.front(), GL_STATIC_DRAW);
-
-	// Where we specify multiple vbos with strides
-	// Pass in VBO of position data
+	// Set stride - amount of data between each vertex
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
 	glEnableVertexAttribArray(0);
 
-	// Normal attribute
-	//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
-	//glEnableVertexAttribArray(1);
+	//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec3), (GLvoid*)(sizeof(glm::vec3)));
+	//glEnableVertexAttribArray(0);
+
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind buffer
 	glBindVertexArray(0); // Unbind VAO
@@ -253,8 +226,9 @@ int main()
 
 		// Draw		
 		glBindVertexArray(VAO);
-		glDrawArrays(GL_TRIANGLES, 0, 12);
-		// this specifies how many vertices you're drawing, make sure it matches your element list
+		// SPECIFY NUMBER OF FUCKING VERTS
+		glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+		// SPECIFY NUMBER OF INDICES
 		//glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
 
