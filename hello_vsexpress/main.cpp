@@ -15,13 +15,17 @@
 
 /* ==== TODO ====
 
-Wireframe toggle - done
-FACKING vertices (no index) working in new method - get normals next
-Shading with normals
+Enable depth buffer
+Add error handling for no normals in file
 Clean up obj loader to opengl - maybe write your own obj loader and ditch tinyobj
 Find how to structure the program to share needed variables i.e. window WIDTH HEIGHT to shader
 Automate loading matrices to shader
 Get key inputs for camera manipulation
+
+// recently finished
+Wireframe toggle - done
+FACKING vertices (no index) working in new method - get normals next - done
+Shading with normals - done
 
 */
 
@@ -30,6 +34,7 @@ Get key inputs for camera manipulation
 // Function prototypes
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 
+glm::vec3 calcNormal(glm::vec3 _v1, glm::vec3 _v2);
 
 // Window dimensions
 const GLuint WIDTH = 800, HEIGHT = 600;
@@ -132,23 +137,14 @@ int main()
 		glfwTerminate();
 		return 1;
 	}
-	
-	//std::cout << "vert size = " << attrib.vertices.size() << std::endl;
-	//std::cout << "norm size = " << attrib.normals.size() << std::endl;
-	//std::cout << "index size = " << shapes[0].mesh.indices.size() << std::endl;
 
-	
 	// load into inefficient vert list
 	std::vector<glm::vec3> vertices;
 	
-	
-	/*for (int i = 0; i < 12; i++) {
-		vertices.push_back(glm::vec3());
-	}*/
-	
-	
+
+	// for each mesh
 	for (size_t s = 0; s < shapes.size(); s++) {
-		int vSize = attrib.vertices.size()-1;
+		// for each face
 		for (size_t f = 0; f < shapes[s].mesh.indices.size() / 3; f++) {
 			// find the index for each vertex
 			tinyobj::index_t idx0 = shapes[s].mesh.indices[3 * f + 0];
@@ -159,10 +155,22 @@ int main()
 			glm::vec3 v1 = glm::vec3(attrib.vertices[3 * idx0.vertex_index + 0], attrib.vertices[3 * idx0.vertex_index + 1], attrib.vertices[3 * idx0.vertex_index + 2]);
 			glm::vec3 v2 = glm::vec3(attrib.vertices[3 * idx1.vertex_index + 0], attrib.vertices[3 * idx1.vertex_index + 1], attrib.vertices[3 * idx1.vertex_index + 2]);
 			glm::vec3 v3 = glm::vec3(attrib.vertices[3 * idx2.vertex_index + 0], attrib.vertices[3 * idx2.vertex_index + 1], attrib.vertices[3 * idx2.vertex_index + 2]);
+		
+			glm::vec3 n1 = glm::vec3(attrib.normals[3 * idx0.normal_index + 0], attrib.normals[3 * idx0.normal_index + 1], attrib.normals[3 * idx0.normal_index + 2]);
+			glm::vec3 n2 = glm::vec3(attrib.normals[3 * idx1.normal_index + 0], attrib.normals[3 * idx1.normal_index + 1], attrib.normals[3 * idx1.normal_index + 2]);
+			glm::vec3 n3 = glm::vec3(attrib.normals[3 * idx2.normal_index + 0], attrib.normals[3 * idx2.normal_index + 1], attrib.normals[3 * idx2.normal_index + 2]);
 
+			//calcNormal(v1, v2);
+
+
+			// have to interlace P.x N.x P.y N.y P.z N.z for stride to work
 			vertices.push_back(v1);
+			vertices.push_back(n1);
 			vertices.push_back(v2);
-			vertices.push_back(v3);
+			vertices.push_back(n2);
+			vertices.push_back(v3);	
+			vertices.push_back(n3);
+
 		}
 	}
 	
@@ -174,11 +182,11 @@ int main()
 	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices.front(), GL_STATIC_DRAW);
 	
 	// Set stride - amount of data between each vertex
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec3), (GLvoid*)0);
 	glEnableVertexAttribArray(0);
 
-	//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec3), (GLvoid*)(sizeof(glm::vec3)));
-	//glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec3), (GLvoid*)(sizeof(glm::vec3)));
+	glEnableVertexAttribArray(1);
 
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind buffer
@@ -227,7 +235,7 @@ int main()
 		// Draw		
 		glBindVertexArray(VAO);
 		// SPECIFY NUMBER OF FUCKING VERTS
-		glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+		glDrawArrays(GL_TRIANGLES, 0, vertices.size() / 2);
 		// SPECIFY NUMBER OF INDICES
 		//glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
@@ -277,4 +285,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 				break;
 		}
 	}
+}
+
+glm::vec3 calcNormal(glm::vec3 _v1, glm::vec3 _v2)
+{
+	return glm::normalize(glm::cross(_v1, _v2));
 }
