@@ -15,7 +15,7 @@
 
 /* ==== TODO ====
 
-Enable depth buffer
+
 Add error handling for no normals in file
 Clean up obj loader to opengl - maybe write your own obj loader and ditch tinyobj
 Find how to structure the program to share needed variables i.e. window WIDTH HEIGHT to shader
@@ -105,7 +105,7 @@ int main()
 	// Set up vertex data (and buffer(s)) and attribute pointers
 	// order must be counter clockwise
 	
-
+	glEnable(GL_DEPTH_TEST);
 	GLuint VAO, VBO, EBO;
 	glGenVertexArrays(1, &VAO);
 	glGenBuffers(1, &VBO);
@@ -138,10 +138,20 @@ int main()
 		return 1;
 	}
 
-	// load into inefficient vert list
-	std::vector<glm::vec3> vertices;
-	
+	// populateVerticesArray( &vertices, "mesh.obj", enum: SMOOTH OR FACE NORMALS)
 
+	struct vertex {
+		glm::vec3 position;
+		glm::vec3 normal;
+		//glm::vec2 uv;
+	};
+
+	// load into inefficient vert list
+	//std::vector<glm::vec3> vertices;
+	std::vector<vertex> vertices;
+	
+	
+	
 	// for each mesh
 	for (size_t s = 0; s < shapes.size(); s++) {
 		// for each face
@@ -152,9 +162,9 @@ int main()
 			tinyobj::index_t idx2 = shapes[s].mesh.indices[3 * f + 2];
 
 			// remember to multiply by 3 because the index points to float array, not vectors
-			glm::vec3 v1 = glm::vec3(attrib.vertices[3 * idx0.vertex_index + 0], attrib.vertices[3 * idx0.vertex_index + 1], attrib.vertices[3 * idx0.vertex_index + 2]);
-			glm::vec3 v2 = glm::vec3(attrib.vertices[3 * idx1.vertex_index + 0], attrib.vertices[3 * idx1.vertex_index + 1], attrib.vertices[3 * idx1.vertex_index + 2]);
-			glm::vec3 v3 = glm::vec3(attrib.vertices[3 * idx2.vertex_index + 0], attrib.vertices[3 * idx2.vertex_index + 1], attrib.vertices[3 * idx2.vertex_index + 2]);
+			glm::vec3 p1 = glm::vec3(attrib.vertices[3 * idx0.vertex_index + 0], attrib.vertices[3 * idx0.vertex_index + 1], attrib.vertices[3 * idx0.vertex_index + 2]);
+			glm::vec3 p2 = glm::vec3(attrib.vertices[3 * idx1.vertex_index + 0], attrib.vertices[3 * idx1.vertex_index + 1], attrib.vertices[3 * idx1.vertex_index + 2]);
+			glm::vec3 p3 = glm::vec3(attrib.vertices[3 * idx2.vertex_index + 0], attrib.vertices[3 * idx2.vertex_index + 1], attrib.vertices[3 * idx2.vertex_index + 2]);
 		
 			glm::vec3 n1 = glm::vec3(attrib.normals[3 * idx0.normal_index + 0], attrib.normals[3 * idx0.normal_index + 1], attrib.normals[3 * idx0.normal_index + 2]);
 			glm::vec3 n2 = glm::vec3(attrib.normals[3 * idx1.normal_index + 0], attrib.normals[3 * idx1.normal_index + 1], attrib.normals[3 * idx1.normal_index + 2]);
@@ -162,14 +172,23 @@ int main()
 
 			//calcNormal(v1, v2);
 
+			vertex v1, v2, v3;
 
-			// have to interlace P.x N.x P.y N.y P.z N.z for stride to work
+			v1.position = p1;
+			v2.position = p2;
+			v3.position = p3;
+			v1.normal = n1;
+			v2.normal = n2;			
+			v3.normal = n3;
+
+			// have to interlace P.x N.x P.y N.y P.z N.z for stride to work - WRONG NO
+			// you were confusing triangles with vertices its  V1p V1n V2p V2n etc
 			vertices.push_back(v1);
-			vertices.push_back(n1);
 			vertices.push_back(v2);
-			vertices.push_back(n2);
-			vertices.push_back(v3);	
-			vertices.push_back(n3);
+			vertices.push_back(v3);
+			
+			
+			
 
 		}
 	}
@@ -179,13 +198,13 @@ int main()
 	// VBO
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
 	//glBufferData(GL_ARRAY_BUFFER, attrib.vertices.size()*sizeof(float), &attrib.vertices.front(), GL_STATIC_DRAW);	
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices.front(), GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vertex), &vertices.front(), GL_STATIC_DRAW);
 	
 	// Set stride - amount of data between each vertex
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec3), (GLvoid*)0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (GLvoid*)0);
 	glEnableVertexAttribArray(0);
 
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec3), (GLvoid*)(sizeof(glm::vec3)));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (GLvoid*)offsetof(vertex, normal));
 	glEnableVertexAttribArray(1);
 
 
@@ -206,7 +225,7 @@ int main()
 		
 		// Clear the colorbuffer
 		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		// Activate shader
 		ourShader.use();
@@ -235,7 +254,7 @@ int main()
 		// Draw		
 		glBindVertexArray(VAO);
 		// SPECIFY NUMBER OF FUCKING VERTS
-		glDrawArrays(GL_TRIANGLES, 0, vertices.size() / 2);
+		glDrawArrays(GL_TRIANGLES, 0, vertices.size());
 		// SPECIFY NUMBER OF INDICES
 		//glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
@@ -290,4 +309,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 glm::vec3 calcNormal(glm::vec3 _v1, glm::vec3 _v2)
 {
 	return glm::normalize(glm::cross(_v1, _v2));
+}
+
+void loadMesh(std::string _filepath, std::vector<glm::vec3> &_vertices) 
+{
+
 }
