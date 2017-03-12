@@ -8,6 +8,7 @@
 #include <glm/gtx/string_cast.hpp>
 #include "shader.h"
 #include "camera.h"
+#include "model.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -15,7 +16,9 @@
 
 /* ==== TODO ====
 
-
+fix calculating normals for inverted triangles
+clean up overall
+Contain all your meshing shit into one function - make easy to draw array of objects
 Add error handling for no normals in file
 Clean up obj loader to opengl - maybe write your own obj loader and ditch tinyobj
 Find how to structure the program to share needed variables i.e. window WIDTH HEIGHT to shader
@@ -23,6 +26,7 @@ Automate loading matrices to shader
 Get key inputs for camera manipulation
 
 // recently finished
+model class for easy loading and drawing of multiple models
 Wireframe toggle - done
 FACKING vertices (no index) working in new method - get normals next - done
 Shading with normals - done
@@ -41,7 +45,7 @@ const GLuint WIDTH = 800, HEIGHT = 600;
 
 // models
 
-const std::string MODEL_PATH = "models/cube.obj";
+const std::string MODEL_PATH = "models/teapot.obj";
 
 
 
@@ -106,6 +110,8 @@ int main()
 	// order must be counter clockwise
 	
 	glEnable(GL_DEPTH_TEST);
+
+	/*
 	GLuint VAO, VBO, EBO;
 	glGenVertexArrays(1, &VAO);
 	glGenBuffers(1, &VBO);
@@ -120,11 +126,6 @@ int main()
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 
-	struct mesh {
-		std::vector<glm::vec3>positions;
-		std::vector<glm::vec3>normals;
-		std::vector<glm::vec2>uvs;
-	};
 
 	std::string err;
 	// c_str on std::string allows to be used for C functions (tinyobj is a C lib)
@@ -138,7 +139,7 @@ int main()
 		return 1;
 	}
 
-	// populateVerticesArray( &vertices, "mesh.obj", enum: SMOOTH OR FACE NORMALS)
+	
 
 	struct vertex {
 		glm::vec3 position;
@@ -211,7 +212,11 @@ int main()
 	glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind buffer
 	glBindVertexArray(0); // Unbind VAO
 
+	*/
 
+	model cube;
+
+	cube.loadObj(MODEL_PATH);
 
 	// Game loop ================================================================
 	float time = 0.0f;
@@ -251,13 +256,14 @@ int main()
 		glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
 
-		// Draw		
-		glBindVertexArray(VAO);
-		// SPECIFY NUMBER OF FUCKING VERTS
-		glDrawArrays(GL_TRIANGLES, 0, vertices.size());
-		// SPECIFY NUMBER OF INDICES
-		//glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
+		cube.draw();
+		//// Draw		
+		//glBindVertexArray(VAO);
+		//// SPECIFY NUMBER OF FUCKING VERTS
+		//glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+		//// SPECIFY NUMBER OF INDICES
+		////glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+		//glBindVertexArray(0);
 
 		// Swap the screen buffers
 		glfwSwapBuffers(window);
@@ -267,8 +273,8 @@ int main()
 	// Loop End ======================
 
 	// Terminate GLFW, clearing any resources allocated by GLFW.
-	glDeleteVertexArrays(1, &VAO);
-	glDeleteBuffers(1, &VBO);
+	//glDeleteVertexArrays(1, &VAO);
+	//glDeleteBuffers(1, &VBO);
 	glfwTerminate();
 	return 0;
 }
