@@ -21,6 +21,7 @@ void main()
 	
 	// outs
 	FragPos = vec3(model * vec4(position, 1.0f));
+	
 	Normal = normal;
     ObjectColor = vec3(0.0f, 0.9f, 0.9f);
 }
